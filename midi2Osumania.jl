@@ -46,3 +46,4 @@ file = open("test.osu", "w")
 write(file,OsuFile.createHitobjects(midiInfo, [2]))
 
 close(file)
+

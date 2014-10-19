@@ -17,7 +17,7 @@ function createHitobjects(midiInfo,trackNums)
       if size(notes,1) > 0
         for j = 1:2:size(notes,1)
           #println(notes[j+1])
-          "$(ret)$(32 + 64 * (note % 8)),192,$(midiToms(midiInfo,notes[j])),128,0,$(midiToms(midiInfo,notes[j+1])):0:0:0:0:\r\n"
+          ret = "$(ret)$(32 + 64 * (note % 8)),192,$(midiToms(midiInfo,notes[j])),128,0,$(midiToms(midiInfo,notes[j+1])):0:0:0:0:\r\n"
           #write(file,"$(32 + 64 * (note % 8)),192,$(midiToms(notes[j])),128,0,$(midiToms(notes[j+1])):0:0:0:0:\r\n")
           #println("$(32 + 64 * (note % 8)),192,$(midiToms(notes[j])),128,0,$(midiToms(notes[j+1])):0:0:0:0:")
           #32,192,4187,128,0,4436:0:0:0:0:

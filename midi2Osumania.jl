@@ -23,7 +23,7 @@ end
 parseCMDARGS()
 
 
-midiInfo = MidiFile.parseMidiFile("test.mid")
+midiInfo = MidiFile.parseMidiFile("test2.mid")
 
 tracks = midiInfo.tracks
 
@@ -41,9 +41,8 @@ println(tempo)
 #  iround((s * 60 * 1000)/( midiInfo.bpm * midiInfo.timeDivision))
 #end
 
-file = open("test.osu", "w")
-
+file = open("test2.osu", "w")
+typeof(file)
 write(file,OsuFile.createHitobjects(midiInfo, [2]))
 
 close(file)
-

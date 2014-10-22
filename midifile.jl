@@ -41,6 +41,25 @@ function getNextByte(s)
   hton(read(s, Uint8))
 end
 
+function getNextLength(s,l)
+  bs = Uint8[l]
+  for i = 1:l
+    bs[i] = getNextByte(s)
+  end
+  bs
+end
+
+function getVaribleLengthData(s)
+  nextByte::Uint8 = getNextByte(s)
+  dat::Uint64 = nextByte & 0b01111111
+  while nextByte & 0b10000000 != 0
+    nextByte = getNextByte(s)
+    dat = dat << 7
+    dat += nextByte & 0b01111111
+  end
+  dat
+end
+
 macro nb()
   return :(getNextByte(s); i += 1)
 end
@@ -68,72 +87,78 @@ function parseMidiFile(fname)
 
     absoluteΔ::Uint64 = 0
     trackSize = parseTrackHeader(s)
-    #println("TRACK:")
-    i = 1
-    while  i <= trackSize
+    println("TRACK:")
+    previousEvent::Uint8 = 0
+    previousChannel::Uint8 = 0
+    offset = position(s)
+    while position(s) - offset < trackSize
       #delta event reader
-      nextByte = getNextByte(s); i += 1
-      ΔEvent::Uint64 = nextByte & 0b01111111
-      d::Uint64 = 0
-      while nextByte & 0b10000000 != 0
-        nextByte = getNextByte(s); i += 1
-        d += 1
-        ΔEvent = ΔEvent << 7
-        ΔEvent += nextByte & 0b01111111
-      end
-      #@printf("Δ:%d,",ΔEvent)
+      nextByte::Uint8 = 0;
+      ΔEvent::Uint64 = getVaribleLengthData(s)
+      @printf("Δ:%d,",ΔEvent)
       absoluteΔ += ΔEvent
 
       #Normal Event
-      nextByte = getNextByte(s); i += 1
-      eventType = (nextByte & 0b11110000) >> 4
-      channel = (nextByte & 0b00001111)
-      #@printf("ϵτ:%#02x|c:%#02x\n",eventType,channel)
+      nextByte = getNextByte(s);
+      eventType::Uint8 = (nextByte & 0b11110000) >> 4
+      channel::Uint8 = (nextByte & 0b00001111)
+
+      if (eventType < 0x8) #RUNNING STATUS WTF
+        eventType = previousEvent
+        channel = previousChannel
+        skip(s, -1)
+      else
+        previousEvent = eventType
+        previousChannel = channel
+      end
+
+      @printf("ϵτ:%#02x|c:%#02x\n",eventType,channel)
 
       #Meta Event
       if (eventType == 0xf && channel == 0xf)
         #type of meta event
-        nextByte = getNextByte(s); i += 1
-        metaType = nextByte
-        #@printf("METAEVENTTYPE:%#04x\n",nextByte)
+        metaType = getNextByte(s);
+        length = getVaribleLengthData(s)
+        @printf("METAEVENTTYPE:%#04x, LEN: \n",nextByte)
 
         #time signature
         if (metaType == 0x58)
-          length = getNextByte(s); i += 1
-          numerator = getNextByte(s); i += 1
-          denominator = getNextByte(s); i += 1
-          pulse = getNextByte(s); i += 1
-          noteperquarter = getNextByte(s); i += 1
+          #length = getNextByte(s);
+          numerator = getNextByte(s)
+          denominator = getNextByte(s)
+          pulse = getNextByte(s)
+          noteperquarter = getNextByte(s)
           ppq = pulse/noteperquarter
-          #@printf("timeSignature:%d/%d\n",numerator,2^denominator)
+          @printf("timeSignature:%d/%d\n",numerator,2^denominator)
           #println("pulse:$pulse,npq:$noteperquarter")
         end
 
         #sequencer specific
         if (metaType == 0x7f)
-          length = getNextByte(s); i += 1
+          #length = getNextByte(s); i += 1
           for k = 1:length
-            getNextByte(s); i += 1
+            getNextByte(s)
           end
         end
 
 
         #copyright notice
         if (metaType == 0x02)
-          length = getNextByte(s); i += 1
+          #length = getNextByte(s); i += 1
           cbs = zeros(Uint8,length)
           for k = 1:length
-            cbs[k] = getNextByte(s) ; i += 1
+            cbs[k] = getNextByte(s)
           end
           copyright = ASCIIString(cbs)
+          println("copyright???:$(ASCIIString(cbs))")
         end
 
         if (metaType == 0x51)
-          length = getNextByte(s); i += 1
+          #length = getNextByte(s); i += 1
           mpqn = 0
           for k = 1:length
             mpqn = mpqn << 8
-            mpqn += getNextByte(s); i += 1
+            mpqn += getNextByte(s)
           end
 
           bpm = MICROSECONDS_PER_MINUTE / mpqn
@@ -141,32 +166,35 @@ function parseMidiFile(fname)
 
         #Key Signature
         if (metaType == 0x59)
-          length = getNextByte(s); i += 1
-          key = getNextByte(s); i += 1
-          scale = getNextByte(s); i += 1
+          #length = getNextByte(s); i += 1
+          key = getNextByte(s)
+          scale = getNextByte(s)
         end
 
         #Text Event
         if (metaType == 0x01)
-          length = getNextByte(s); i += 1
+          #length = getNextByte(s); i += 1
+          cbs = zeros(Uint8,length)
           for k = 1:length
-            getNextByte(s); i += 1
+            cbs[k] = getNextByte(s)
           end
+          println("TEXTEVENT???:$(ASCIIString(cbs))")
         end
 
         #End Of Track
         if (metaType == 0x2f)
-          length = getNextByte(s); i += 1
-          println(length)
+          #length = getNextByte(s); i += 1
+          println("------------------END-----------------------")
         end
 
         #Sequence/Track Name
         if (metaType == 0x03)
-          length = getNextByte(s); i += 1
+          #length = getNextByte(s); i += 1
           cbs = zeros(Uint8,length)
           for k = 1:length
-            cbs[k] = getNextByte(s) ; i += 1
+            cbs[k] = getNextByte(s)
           end
+          println("TRACKNAME???:$(ASCIIString(cbs))")
           if trackName == ""
             trackName = ASCIIString(cbs)
           end
@@ -174,30 +202,39 @@ function parseMidiFile(fname)
 
         #MIDI Channel Prefix
         if (metaType == 0x20)
-          length = getNextByte(s); i += 1
+          #length = getNextByte(s)
+          cbs = zeros(Uint8,length)
           for k = 1:length
-            getNextByte(s); i += 1
+            cbs[k] = getNextByte(s)
           end
+          println("MIDICHANNELPREFIX???:$(ASCIIString(cbs))")
         end
 
       #Program Change
       elseif (eventType == 0xc)
-        programNumber = getNextByte(s); i += 1
+        programNumber = getNextByte(s)
         #println("PROG CHANGE:$programNumber")
 
       #Note ON
       elseif (eventType == 0x9)
-        noteNumber = getNextByte(s); i += 1
-        velocity = getNextByte(s); i += 1
+        noteNumber = getNextByte(s)
+        velocity = getNextByte(s)
         #println("NOTEON:$noteNumber, $velocity")
         push!(notes[1,noteNumber],absoluteΔ)
 
       #Note OFF
       elseif (eventType == 0x8)
-        noteNumber = getNextByte(s); i += 1
-        velocity = getNextByte(s); i += 1
+        noteNumber = getNextByte(s)
+        velocity = getNextByte(s)
         #println("NOTEOFF:$noteNumber, $velocity")
         push!(notes[1,noteNumber],absoluteΔ)
+
+      elseif (eventType < 0x8)
+        #THIS IS RUNNING STATUS, AS IN BRAINFUCKERY
+        #WHY IS THIS IN ABSOLUTELY ZERO SITES ABOUT MIDI????
+
+      else
+        println("UNKNOWN EVENT FUCKING ABORT")
       end
     end
     push!(tracks,notes)
